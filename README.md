@@ -5,4 +5,3 @@ Project Lead: Thao Phan
 Other Participants: Anosh Rabbani, Hiba Souihel
 Project Title: ChaosGate AI — AI Production Readiness & Chaos Testing Platform
 Team Name: N/A
-GitHub ID: ThaoPPhan; phan070803@gmail.com
