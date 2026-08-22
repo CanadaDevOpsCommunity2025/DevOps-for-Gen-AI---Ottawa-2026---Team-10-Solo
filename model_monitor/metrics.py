@@ -42,3 +42,15 @@ def calculate_precision_recall(
         "recall": true_positive / (true_positive + false_negative)
         if true_positive + false_negative else 0.0,
     }
+
+
+def calculate_false_positive_rate(
+    actual: Iterable[bool | int], predicted: Iterable[bool | int]
+) -> float:
+    """Return the share of legitimate transactions incorrectly flagged as fraud."""
+
+    actual_values, predicted_values = _paired_labels(actual, predicted)
+    false_positive = sum(not a and p for a, p in zip(actual_values, predicted_values))
+    true_negative = sum(not a and not p for a, p in zip(actual_values, predicted_values))
+    legitimate = false_positive + true_negative
+    return false_positive / legitimate if legitimate else 0.0
