@@ -1,0 +1,7 @@
+{
+  "name": "@sentinel/observe-sdk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Drop-in observability SDK — mandatory integration point for apps built by AI agents in this workspace",
+  "main": "observe-sdk.js"
+}

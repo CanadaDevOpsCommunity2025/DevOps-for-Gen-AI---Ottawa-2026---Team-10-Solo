@@ -1,0 +1,19 @@
+{
+  "name": "sentinel-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sentinel — AI agent observability platform (backend + dashboard)",
+  "main": "src/server.js",
+  "scripts": {
+    "seed": "node seed.js",
+    "seed:force": "node seed.js --force",
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flight Recorder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ground:#0D1117; --panel:#161D28; --panel2:#1C2534; --rule:#253243;
+  --label:#8FA3B8; --read:#DCE6F0; --dim:#5C6E84;
+  --orange:#FF5A1F; --cyan:#45C7B8; --amber:#D99A2B; --violet:#8C7BE0;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --cond:"Barlow Condensed",'Arial Narrow',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--ground);color:var(--read);font-family:var(--mono);
+  font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.etch{font-family:var(--cond);text-transform:uppercase;letter-spacing:.14em;
+  font-weight:500;color:var(--label);font-size:11px}
+button{font-family:var(--mono);cursor:pointer;border:0;background:none;color:inherit}
+button:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+select{font-family:var(--mono);font-size:12px;background:var(--panel2);
+  color:var(--read);border:1px solid var(--rule);border-radius:3px;padding:5px 8px}
+
+/* ---------- masthead ---------- */
+header{border-bottom:1px solid var(--rule);background:var(--panel);
+  display:flex;align-items:center;gap:22px;padding:11px 20px;flex-wrap:wrap}
+.brand{font-family:var(--cond);font-weight:600;font-size:19px;letter-spacing:.05em;
+  text-transform:uppercase;display:flex;align-items:center;gap:10px}
+.rec{width:9px;height:9px;border-radius:50%;background:var(--orange);
+  box-shadow:0 0 0 0 rgba(255,90,31,.6);animation:pulse 2.4s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,90,31,.55)}
+  70%{box-shadow:0 0 0 9px rgba(255,90,31,0)}100%{box-shadow:0 0 0 0 rgba(255,90,31,0)}}
+@media (prefers-reduced-motion:reduce){.rec{animation:none}}
+.spacer{flex:1}
+.ctl{display:flex;align-items:center;gap:7px}
+
+/* ---------- instrument row ---------- */
+.gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  border-bottom:1px solid var(--rule);background:var(--panel)}
+.gauge{padding:11px 18px;border-right:1px solid var(--rule)}
+.gauge:last-child{border-right:0}
+.gauge .v{font-size:24px;font-weight:500;letter-spacing:-.01em;line-height:1.15}
+.gauge .v.warn{color:var(--amber)} .gauge .v.crit{color:var(--orange)}
+.gauge .v.ok{color:var(--cyan)}
+.gauge .sub{font-size:10.5px;color:var(--dim);margin-top:1px}
+
+/* ---------- layout ---------- */
+main{display:grid;grid-template-columns:minmax(330px,1fr) minmax(0,1.55fr);
+  height:calc(100vh - 108px)}
+@media(max-width:900px){main{grid-template-columns:1fr;height:auto}}
+.feed{border-right:1px solid var(--rule);overflow-y:auto;background:var(--ground)}
+.detail{overflow-y:auto;padding:20px 22px 60px}
+.secthead{display:flex;align-items:center;gap:10px;padding:9px 16px;
+  border-bottom:1px solid var(--rule);position:sticky;top:0;background:var(--panel);z-index:3}
+
+/* ---------- flight progress strip ---------- */
+.strip{display:grid;grid-template-columns:4px 1fr;border-bottom:1px solid var(--rule);
+  cursor:pointer;background:var(--ground)}
+.strip:hover{background:var(--panel)}
+.strip[aria-selected="true"]{background:var(--panel2)}
+.strip[aria-selected="true"] .notch{width:4px}
+.notch{background:var(--dim)}
+.strip.ok .notch{background:var(--cyan)}
+.strip.warning .notch{background:var(--amber)}
+.strip.critical .notch{background:var(--orange)}
+.strip.info .notch{background:var(--violet)}
+.sbody{padding:9px 14px 10px 12px;min-width:0}
+.srow{display:flex;align-items:baseline;gap:9px}
+.sid{font-weight:500;font-size:12.5px;letter-spacing:.02em}
+.stag{font-family:var(--cond);text-transform:uppercase;letter-spacing:.1em;
+  font-size:10.5px;color:var(--label)}
+.strip.critical .stag{color:var(--orange)}
+.strip.warning .stag{color:var(--amber)}
+.smeta{display:flex;gap:12px;font-size:11px;color:var(--dim);margin-top:3px}
+/* the inline route: a compressed span map, like the route field on a real strip */
+.route{display:flex;gap:1.5px;height:4px;margin-top:7px}
+.route i{display:block;border-radius:1px;opacity:.85}
+.k-llm{background:var(--violet)} .k-retrieval{background:var(--cyan)}
+.k-tool{background:#5E8FC7} .k-guardrail{background:var(--amber)}
+.k-agent{background:#7C8CA0} .k-embedding{background:#4A7A72}
+.k-chain{background:#3A4B61}
+.k-err{background:var(--orange)}
+
+/* ---------- verdict ---------- */
+.verdict{border:1px solid var(--rule);border-left:3px solid var(--dim);
+  background:var(--panel);padding:14px 16px;margin-bottom:20px}
+.verdict.critical{border-left-color:var(--orange)}
+.verdict.warning{border-left-color:var(--amber)}
+.verdict.info{border-left-color:var(--violet)}
+.verdict.ok{border-left-color:var(--cyan)}
+.verdict h2{font-family:var(--cond);font-size:17px;font-weight:600;letter-spacing:.02em;
+  margin:5px 0 6px;text-transform:none}
+.verdict p{color:var(--label);font-size:12.5px;max-width:64ch}
+.vcode{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+
+/* ---------- waterfall ---------- */
+.wf{border:1px solid var(--rule);background:var(--panel);margin-bottom:20px}
+.ruler{display:flex;justify-content:space-between;padding:6px 14px 4px;
+  border-bottom:1px solid var(--rule);font-size:10px;color:var(--dim)}
+.span{display:grid;grid-template-columns:150px 1fr 168px;gap:10px;align-items:center;
+  padding:5px 14px;border-bottom:1px solid rgba(37,50,67,.5)}
+.span:last-child{border-bottom:0}
+.span.ev{background:rgba(255,90,31,.07);box-shadow:inset 2px 0 0 var(--orange)}
+.span.root{background:rgba(37,50,67,.32)}
+.sname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.sname .dot{display:inline-block;width:6px;height:6px;border-radius:1px;margin-right:7px}
+.track{position:relative;height:13px;background:
+  repeating-linear-gradient(90deg,var(--rule) 0 1px,transparent 1px 10%)}
+.bar{position:absolute;top:1px;height:11px;border-radius:1px;min-width:2px}
+.snum{text-align:right;font-size:11px;color:var(--label);white-space:nowrap}
+.err{grid-column:1/-1;color:var(--orange);font-size:11.5px;padding:2px 0 4px 160px}
+
+/* ---------- payloads ---------- */
+.pay{border:1px solid var(--rule);background:var(--panel);padding:14px 16px}
+.pitem{border-top:1px solid var(--rule);padding:11px 0}
+.pitem:first-of-type{border-top:0}
+.pcontent{white-space:pre-wrap;word-break:break-word;font-size:12px;color:var(--read);
+  margin-top:5px;max-width:76ch}
+.tok{background:rgba(255,90,31,.16);color:var(--orange);border-radius:2px;padding:0 3px}
+.locked{border:1px dashed var(--rule);padding:22px 16px;text-align:center;color:var(--dim)}
+.locked strong{color:var(--label);font-weight:500}
+.chip{display:inline-block;font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+  font-family:var(--cond);border:1px solid var(--rule);border-radius:2px;
+  padding:1px 6px;color:var(--label);margin-left:7px}
+.chip.hot{border-color:var(--orange);color:var(--orange)}
+
+/* ---------- inject bar ---------- */
+.inject{display:flex;gap:6px;flex-wrap:wrap;padding:9px 16px;border-bottom:1px solid var(--rule);
+  background:var(--panel2)}
+.inject button{border:1px solid var(--rule);border-radius:2px;padding:4px 9px;
+  font-size:11px;color:var(--label);background:var(--panel)}
+.inject button:hover{border-color:var(--orange);color:var(--orange)}
+.inject button:disabled{opacity:.45;cursor:wait}
+.empty{padding:44px 20px;text-align:center;color:var(--dim);font-size:12.5px}
+.audit{margin-top:20px;border:1px solid var(--rule);background:var(--panel);padding:13px 16px}
+.arow{display:grid;grid-template-columns:34px 1fr 88px 62px;gap:8px;font-size:11px;
+  padding:3px 0;color:var(--label);border-top:1px solid rgba(37,50,67,.5)}
+.arow.deny{color:var(--orange)}
+.ok-badge{color:var(--cyan)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="rec" aria-hidden="true"></span>Flight Recorder</div>
+  <div class="ctl"><span class="etch">Tenant</span>
+    <select id="tenant" aria-label="Tenant"></select></div>
+  <div class="ctl"><span class="etch">Role</span>
+    <select id="role" aria-label="Role">
+      <option value="developer">developer</option>
+      <option value="responder">responder</option>
+      <option value="security">security</option>
+      <option value="auditor">auditor</option>
+    </select></div>
+  <div class="spacer"></div>
+  <div class="etch" id="clock"></div>
+</header>
+
+<div class="gauges" id="gauges"></div>
+
+<main>
+  <section class="feed" aria-label="Trace feed">
+    <div class="secthead"><span class="etch">Live feed</span>
+      <span class="etch" id="feedcount" style="color:var(--dim)"></span></div>
+    <div class="inject" id="inject"></div>
+    <div id="strips"></div>
+  </section>
+
+  <section class="detail" id="detail">
+    <div class="empty">Select a trace from the feed.</div>
+  </section>
+</main>
+
+<script>
+const KINDS=["chain","agent","embedding","retrieval","llm","guardrail","tool"];
+const SCEN=[["pii_leak","PII leak"],["retrieval_miss","Retrieval miss"],
+  ["tool_loop","Tool loop"],["cost_spike","Cost spike"],["timeout","Timeout"],
+  ["prompt_injection","Injection"],["nominal","Healthy"]];
+let tenant=null, role="developer", selected=null, traces=[], busy=false;
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ms=v=>v>=1000?(v/1000).toFixed(v>=10000?0:1)+"s":Math.round(v)+"ms";
+const money=v=>"$"+(v||0).toFixed(5);
+
+async function api(path,opts={}){
+  const r=await fetch(path,{...opts,headers:{"X-FR-Role":role,...(opts.headers||{})}});
+  if(!r.ok) return {__error:(await r.json().catch(()=>({}))).error||r.status,__status:r.status};
+  return r.json();
+}
+
+/* ---------- gauges ---------- */
+function renderGauges(s){
+  if(s.__error){$("#gauges").innerHTML=
+    `<div class="gauge"><div class="v crit">—</div><div class="etch">Access denied</div>
+     <div class="sub">${esc(s.__error)}</div></div>`;return;}
+  const errRate=s.traces?(s.errors/s.traces*100):0;
+  const rel=Object.entries(s.releases||{});
+  let drift="—",driftCls="";
+  if(rel.length===2){
+    const[a,b]=rel; const m=b[1].avg/Math.max(a[1].avg,1e-9);
+    drift=m.toFixed(1)+"×"; driftCls=m>1.5?"crit":m>1.15?"warn":"ok";
+  }
+  const g=[
+    ["Traces",s.traces,"","last 400 in window"],
+    ["Error rate",errRate.toFixed(1)+"%",errRate>4?"crit":errRate>2?"warn":"ok",s.errors+" failed"],
+    ["Spend",("$"+(s.cost_usd||0).toFixed(2)),"","median "+money(s.p50_cost)],
+    ["Latency",ms(s.avg_ms||0),(s.avg_ms>9000?"warn":"ok"),"mean across traces"],
+    ["Redaction escapes",s.escaped,s.escaped?"crit":"ok","caught at ingest"],
+    ["Release cost drift",drift,driftCls,rel.map(r=>r[0]).join(" → ")],
+  ];
+  $("#gauges").innerHTML=g.map(([l,v,c,sub])=>
+    `<div class="gauge"><div class="v ${c||""}">${esc(v)}</div>
+     <div class="etch">${esc(l)}</div><div class="sub">${esc(sub)}</div></div>`).join("");
+}
+
+/* ---------- feed ---------- */
+function severity(t){
+  if(t.status==="error")return "critical";
+  const s=t.scenario;
+  if(s==="pii_leak")return "critical";
+  if(s==="retrieval_miss")return "critical";
+  if(s==="prompt_injection")return "info";
+  if(s&&s!=="nominal")return "warning";
+  return "ok";
+}
+function routeBar(t){
+  // compressed span map — the "route" field on an ATC strip
+  const n=t.span_count||8, seq=["agent","embedding","retrieval","llm","guardrail","tool","llm"];
+  let cells=[];
+  for(let i=0;i<Math.min(n-1,14);i++){
+    const k=seq[i%seq.length];
+    const bad=t.status==="error"&&i>=n-3;
+    cells.push(`<i class="${bad?"k-err":"k-"+k}" style="flex:${k==="llm"?3:1}"></i>`);
+  }
+  return `<div class="route" aria-hidden="true">${cells.join("")}</div>`;
+}
+function renderFeed(){
+  if(!traces.length){$("#strips").innerHTML=
+    `<div class="empty">No traces yet.<br>Run <code>harness/run.py --backfill 6h --backfill-count 900 --backfill-only</code></div>`;return;}
+  $("#feedcount").textContent=traces.length+" shown";
+  $("#strips").innerHTML=traces.map(t=>{
+    const sev=severity(t);
+    return `<div class="strip ${sev}" role="option" tabindex="0"
+      aria-selected="${t.trace_id===selected}" data-id="${t.trace_id}">
+      <div class="notch"></div>
+      <div class="sbody">
+        <div class="srow"><span class="sid">${esc(t.trace_id.slice(0,14))}</span>
+          <span class="stag">${esc((t.scenario||"trace").replace(/_/g," "))}</span></div>
+        <div class="smeta"><span>${ms(t.duration_ms)}</span><span>${money(t.cost_usd)}</span>
+          <span>${esc(t.model||"—")}</span><span>${esc(t.env||"")}</span></div>
+        ${routeBar(t)}
+      </div></div>`;}).join("");
+  $("#strips").querySelectorAll(".strip").forEach(el=>{
+    const go=()=>open(el.dataset.id);
+    el.onclick=go;
+    el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}};
+  });
+}
+
+/* ---------- waterfall ---------- */
+function waterfall(spans,ev){
+  const root=spans.find(s=>!s.parent_span_id)||spans[0];
+  spans=[root,...spans.filter(s=>s!==root)];
+  const t0=root.start_ns, total=Math.max(1,root.end_ns-root.start_ns);
+  const ticks=[0,.25,.5,.75,1].map(f=>ms(total/1e6*f));
+  const rows=spans.map(s=>{
+    const off=(s.start_ns-t0)/total*100, w=Math.max(.6,(s.end_ns-s.start_ns)/total*100);
+    const a=s.attrs||{};
+    let note="";
+    if(s.kind==="llm")note=`${a["gen_ai.usage.input_tokens"]||0}→${a["gen_ai.usage.output_tokens"]||0}tok · ${money(s.cost_usd)}`;
+    else if(s.kind==="retrieval")note=`k=${a["fr.retrieval.k"]} top=${(a["fr.retrieval.top_score"]||0).toFixed(2)}`;
+    else if(s.kind==="tool")note=`args ${String(a["fr.tool.args_hash"]||"").slice(0,8)}`;
+    else if(s.kind==="guardrail")note=`${a["fr.guardrail.rule"]||""}=${a["fr.guardrail.verdict"]||""}`;
+    const hot=ev.includes(s.span_id), bad=s.status==="error";
+    return `<div class="span ${hot?"ev":""} ${!s.parent_span_id?"root":""}">
+      <div class="sname"><span class="dot k-${s.kind}"></span>${esc(s.name)}</div>
+      <div class="track"><div class="bar ${bad?"k-err":"k-"+s.kind}"
+        style="left:${off}%;width:${w}%"></div></div>
+      <div class="snum">${ms(s.duration_ms)}${note?" · "+esc(note):""}</div>
+      ${s.error_type?`<div class="err">${esc(s.error_type)}: ${esc(s.error_message||"")}</div>`:""}
+    </div>`;}).join("");
+  return `<div class="wf"><div class="ruler">${ticks.map(t=>`<span>${t}</span>`).join("")}</div>${rows}</div>`;
+}
+
+/* ---------- payloads ---------- */
+function payloadPanel(d){
+  if(d.__status===403) return `<div class="pay"><div class="etch">Payloads</div>
+    <div class="locked" style="margin-top:11px">
+      <strong>Locked for role “${esc(role)}”</strong><br>
+      Reading prompts and completions needs the <code>payload:read</code> capability.<br>
+      Seeing that a trace failed and seeing the user content that failed are separate privileges.
+    </div></div>`;
+  if(!d.payloads||!d.payloads.length) return "";
+  const items=d.payloads.map(p=>{
+    const body=esc(p.content).replace(/&lt;([A-Z_]+):([0-9a-f]{4,8})&gt;/g,
+      '<span class="tok">&lt;$1:$2&gt;</span>');
+    const f=Object.entries(p.findings||{}).map(([k,v])=>`${v}× ${k.toLowerCase().replace(/_/g," ")}`).join(", ");
+    const where=p.caught_at==="read"?" caught on read":"";
+    return `<div class="pitem"><div class="etch">${esc(p.role)}
+      ${f?`<span class="chip hot">${esc(f)} masked${where}</span>`:""}</div>
+      <div class="pcontent">${body}</div></div>`;}).join("");
+  return `<div class="pay"><div class="etch">Payloads
+    <span class="chip">redacted at ingest and again on read</span></div>${items}</div>`;
+}
+
+/* ---------- audit ---------- */
+async function auditPanel(){
+  const a=await api("/api/audit");
+  if(a.__error) return "";
+  const chain=a.verified?`<span class="ok-badge">chain verified</span>`
+    :`<span style="color:var(--orange)">CHAIN BROKEN</span>`;
+  if(a.locked) return `<div class="audit"><div class="etch">Audit trail</div>
+    <div class="locked" style="margin-top:10px"><strong>${a.total} entries recorded</strong><br>
+    Contents need <code>audit:read</code>. ${chain}</div></div>`;
+  const rows=a.entries.slice(0,12).map(e=>
+    `<div class="arow ${e.allowed?"":"deny"}"><span>${e.seq}</span>
+      <span>${esc(e.action)} · ${esc(e.target).slice(0,14)}</span>
+      <span>${esc(e.principal)}</span><span>${e.allowed?"allow":"DENY"}</span></div>`).join("");
+  return `<div class="audit"><div class="etch">Audit trail — ${a.total} entries · ${chain}</div>
+    ${rows}</div>`;
+}
+
+/* ---------- detail ---------- */
+async function open(id){
+  selected=id; renderFeed();
+  const d=await api(`/api/trace/${id}?tenant=${tenant}`);
+  if(d.__error){$("#detail").innerHTML=
+    `<div class="verdict critical"><div class="vcode">${d.__status}</div>
+     <h2>${esc(d.__error)}</h2><p>Traces are scoped to a tenant. A cross-tenant
+     read returns 404 rather than 403 — a 403 would confirm the trace exists.</p></div>`;return;}
+  const v=d.verdict, ev=v.evidence||[];
+  const p=await api(`/api/payloads/${id}?tenant=${tenant}`);
+  $("#detail").innerHTML=
+    `<div class="verdict ${v.severity}">
+       <div class="vcode">${esc(v.code)} · confidence ${(v.confidence*100).toFixed(0)}%</div>
+       <h2>${esc(v.title)}</h2><p>${esc(v.detail)}</p></div>
+     ${waterfall(d.spans,ev)}
+     ${payloadPanel(p)}
+     ${await auditPanel()}`;
+}
+
+/* ---------- polling ---------- */
+async function refresh(){
+  if(!tenant)return;
+  const [t,s]=await Promise.all([
+    api(`/api/traces?tenant=${tenant}&limit=60`), api(`/api/stats?tenant=${tenant}`)]);
+  renderGauges(s);
+  if(!t.__error){traces=t.traces;renderFeed();}
+  else $("#strips").innerHTML=`<div class="empty">${esc(t.__error)}</div>`;
+}
+
+/* ---------- inject ---------- */
+function renderInject(){
+  $("#inject").innerHTML=`<span class="etch" style="align-self:center">Inject</span>`+
+    SCEN.map(([k,l])=>`<button data-s="${k}">${l}</button>`).join("");
+  $("#inject").querySelectorAll("button").forEach(b=>b.onclick=async()=>{
+    if(busy)return; busy=true;
+    $("#inject").querySelectorAll("button").forEach(x=>x.disabled=true);
+    await fetch(`/api/inject?scenario=${b.dataset.s}&count=1`,{method:"POST"});
+    await refresh();
+    if(traces[0])open(traces[0].trace_id);
+    $("#inject").querySelectorAll("button").forEach(x=>x.disabled=false); busy=false;
+  });
+}
+
+/* ---------- boot ---------- */
+(async()=>{
+  const t=await api("/api/tenants");
+  $("#tenant").innerHTML=(t.tenants||[]).map(x=>`<option>${esc(x)}</option>`).join("");
+  tenant=(t.tenants||[])[0];
+  $("#tenant").onchange=e=>{tenant=e.target.value;selected=null;
+    $("#detail").innerHTML='<div class="empty">Select a trace from the feed.</div>';refresh();};
+  $("#role").onchange=e=>{role=e.target.value;refresh();if(selected)open(selected);};
+  renderInject();
+  await refresh();
+  setInterval(refresh,2500);
+  setInterval(()=>{$("#clock").textContent=new Date().toLocaleTimeString("en-GB");},1000);
+})();
+</script>
+</body>
+</html>

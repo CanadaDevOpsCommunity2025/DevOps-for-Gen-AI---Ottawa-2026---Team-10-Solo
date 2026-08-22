@@ -1,0 +1,13 @@
+node_modules/
+platform/data/*.db
+*.log
+
+flight-recorder/.venv/
+flight-recorder/flightrecorder.db*
+flight-recorder/traces.jsonl
+flight-recorder/sentinel-config.json
+__pycache__/
+*.pyc
+
+platform/.env
+deploy/*.pem

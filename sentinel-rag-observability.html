@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel — RAG Observability Platform</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root{
+  --bg: #0c1116;
+  --bg-raised: #121821;
+  --bg-raised-2: #161e29;
+  --line: #232d3a;
+  --line-soft: #1a222d;
+  --text: #dce4ec;
+  --text-dim: #7d8ba0;
+  --text-faint: #4c5768;
+  --teal: #29d3c8;
+  --teal-dim: #1a3a3a;
+  --amber: #f0a83c;
+  --red: #ef5b5b;
+  --red-dim: #3a1f22;
+  --green: #5bd88a;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', sans-serif;
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  font-size:14px; -webkit-font-smoothing:antialiased;
+}
+
+.app{display:flex; min-height:100vh;}
+
+/* ---------- SIDEBAR ---------- */
+.sidebar{
+  width:250px; flex-shrink:0; background:var(--bg-raised);
+  border-right:1px solid var(--line); padding:20px 14px;
+  display:flex; flex-direction:column;
+}
+.brand{display:flex; align-items:center; gap:10px; padding:4px 8px 20px;}
+.brand-mark{color:var(--teal); font-size:20px;}
+.brand-name{font-family:var(--mono); font-weight:700; font-size:16px; letter-spacing:0.5px;}
+
+.tenant-switcher{
+  background:var(--bg-raised-2); border:1px solid var(--line); border-radius:10px;
+  padding:12px; margin-bottom:20px;
+}
+.tenant-switcher label{
+  display:block; font-size:10px; text-transform:uppercase; letter-spacing:0.08em;
+  color:var(--text-faint); margin-bottom:6px; font-family:var(--mono);
+}
+.tenant-switcher select{
+  width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+  padding:7px 8px; border-radius:6px; font-size:12.5px; margin-bottom:8px; font-family:var(--sans);
+}
+.tenant-switcher select:last-child{margin-bottom:0;}
+
+.nav-section-label{
+  font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em;
+  color:var(--text-faint); padding:14px 10px 6px;
+}
+.nav-item{
+  display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px;
+  color:var(--text-dim); text-decoration:none; font-size:13px; cursor:pointer;
+  transition:background .12s, color .12s;
+}
+.nav-item .ic{width:16px; text-align:center; color:var(--text-faint); font-size:13px;}
+.nav-item:hover{background:var(--bg-raised-2); color:var(--text);}
+.nav-item.active{background:var(--teal-dim); color:var(--teal);}
+.nav-item.active .ic{color:var(--teal);}
+
+.sidebar-footer{
+  margin-top:auto; font-size:11px; color:var(--text-faint); display:flex; align-items:center; gap:7px;
+  padding:10px 8px; font-family:var(--mono);
+}
+.live-dot{width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 1.8s infinite;}
+@keyframes pulse{0%,100%{opacity:1;} 50%{opacity:.35;}}
+
+/* ---------- MAIN ---------- */
+.main{flex:1; padding:28px 36px 60px; max-width:1180px;}
+.topbar{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px;}
+.topbar h1{font-size:22px; font-weight:700; letter-spacing:-0.01em;}
+.subtitle{color:var(--text-dim); font-size:13px; margin-top:4px;}
+.alert-pill{
+  font-family:var(--mono); font-size:12px; padding:8px 14px; border-radius:20px;
+  background:var(--red-dim); color:var(--red); border:1px solid #4a2529;
+}
+.alert-pill.clear{background:var(--teal-dim); color:var(--teal); border-color:#1f4442;}
+
+.view.hidden{display:none;}
+
+/* ---------- SHARED CARD / GRID PRIMITIVES ---------- */
+.grid{display:grid; gap:16px;}
+.grid-4{grid-template-columns:repeat(4,1fr);}
+.grid-3{grid-template-columns:repeat(3,1fr);}
+.grid-2{grid-template-columns:repeat(2,1fr);}
+
+.card{
+  background:var(--bg-raised); border:1px solid var(--line); border-radius:12px; padding:18px;
+}
+.card-title{font-size:12px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.06em; color:var(--text-faint); margin-bottom:10px;}
+
+.stat-card .stat-value{font-family:var(--mono); font-size:30px; font-weight:700; letter-spacing:-0.01em;}
+.stat-card .stat-label{color:var(--text-dim); font-size:12.5px; margin-top:4px;}
+.stat-card.warn .stat-value{color:var(--amber);}
+.stat-card.bad .stat-value{color:var(--red);}
+.stat-card.good .stat-value{color:var(--teal);}
+
+.section{margin-bottom:24px;}
+.section-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
+.section-head h2{font-size:15px; font-weight:600;}
+.section-head .hint{font-size:12px; color:var(--text-faint);}
+
+/* ---------- TABLE ---------- */
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+thead th{
+  text-align:left; font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--text-faint); padding:8px 10px; border-bottom:1px solid var(--line);
+}
+tbody td{padding:10px; border-bottom:1px solid var(--line-soft); vertical-align:top;}
+tbody tr:hover{background:var(--bg-raised-2);}
+.mono{font-family:var(--mono);}
+.dim{color:var(--text-dim);}
+.faint{color:var(--text-faint);}
+
+/* ---------- BADGES ---------- */
+.badge{
+  display:inline-block; font-family:var(--mono); font-size:10.5px; padding:3px 8px;
+  border-radius:5px; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap;
+}
+.badge.critical{background:var(--red-dim); color:var(--red); border:1px solid #4a2529;}
+.badge.high{background:#3a2a1a; color:var(--amber); border:1px solid #4a3a1f;}
+.badge.warn{background:#3a2a1a; color:var(--amber); border:1px solid #4a3a1f;}
+.badge.info{background:#1a2a3a; color:#6fb3e0; border:1px solid #23384a;}
+.badge.ok, .badge.success{background:var(--teal-dim); color:var(--teal); border:1px solid #1f4442;}
+.badge.neutral{background:var(--bg-raised-2); color:var(--text-dim); border:1px solid var(--line);}
+
+/* ---------- REDACTION DEMO (signature element) ---------- */
+.redact-demo{
+  background:var(--bg-raised); border:1px solid var(--line); border-radius:12px; padding:0; overflow:hidden;
+}
+.redact-demo-head{
+  display:flex; justify-content:space-between; align-items:center; padding:14px 18px;
+  border-bottom:1px solid var(--line); background:var(--bg-raised-2);
+}
+.redact-demo-head .title{font-family:var(--mono); font-size:12px; color:var(--text-dim);}
+.redact-panels{display:grid; grid-template-columns:1fr 1fr;}
+.redact-panel{padding:18px; font-family:var(--mono); font-size:13px; line-height:1.85;}
+.redact-panel + .redact-panel{border-left:1px solid var(--line);}
+.redact-panel .label{font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); margin-bottom:10px;}
+.pii-strike{color:var(--red); position:relative; text-decoration: line-through; text-decoration-color: rgba(239,91,91,.7); opacity:.55;}
+.pii-token{
+  background:var(--teal-dim); color:var(--teal); padding:1px 6px; border-radius:4px; font-weight:600;
+}
+textarea#rawInput{
+  width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text); border-radius:8px;
+  padding:12px; font-family:var(--mono); font-size:13px; line-height:1.7; resize:vertical; min-height:110px;
+}
+.run-btn{
+  margin-top:10px; background:var(--teal); color:#04211f; border:none; font-family:var(--mono);
+  font-weight:700; font-size:12px; padding:9px 16px; border-radius:7px; cursor:pointer; letter-spacing:.03em;
+}
+.run-btn:hover{filter:brightness(1.08);}
+.entity-legend{display:flex; gap:8px; flex-wrap:wrap; padding:12px 18px; border-top:1px solid var(--line); background:var(--bg-raised-2);}
+
+/* ---------- RETENTION / TENANCY visual bits ---------- */
+.flow-row{display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12.5px; padding:10px 0;}
+.flow-node{background:var(--bg-raised-2); border:1px solid var(--line); border-radius:7px; padding:6px 12px;}
+.flow-arrow{color:var(--text-faint);}
+
+.progress-track{height:6px; background:var(--bg); border-radius:4px; overflow:hidden; margin-top:8px;}
+.progress-fill{height:100%; background:var(--teal); border-radius:4px;}
+.progress-fill.warn{background:var(--amber);}
+.progress-fill.bad{background:var(--red);}
+
+.small-note{font-size:11.5px; color:var(--text-faint); margin-top:8px;}
+
+.two-col{display:grid; grid-template-columns: 1.3fr 1fr; gap:16px;}
+
+@media (max-width:1000px){
+  .grid-4,.grid-3,.grid-2{grid-template-columns:1fr 1fr;}
+  .redact-panels{grid-template-columns:1fr;}
+  .redact-panel + .redact-panel{border-left:none; border-top:1px solid var(--line);}
+  .two-col{grid-template-columns:1fr;}
+}
+
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">◈</div>
+      <div class="brand-name">Sentinel</div>
+    </div>
+
+    <div class="tenant-switcher">
+      <label>Viewing as</label>
+      <select id="roleSelect">
+        <option value="admin">Platform Admin</option>
+        <option value="compliance">Compliance Officer</option>
+        <option value="dev">App Owner (Dev)</option>
+      </select>
+      <select id="tenantSelect">
+        <option value="all">All Tenants (Admin)</option>
+        <option value="t-northwind">Northwind Retail</option>
+        <option value="t-acme">Acme Health</option>
+        <option value="t-lumen">Lumen Finance</option>
+      </select>
+    </div>
+
+    <div class="nav-section-label">Monitor</div>
+    <a class="nav-item active" data-view="overview"><span class="ic">◎</span>Overview</a>
+    <a class="nav-item" data-view="redaction"><span class="ic">▦</span>PII Redaction</a>
+    <a class="nav-item" data-view="audit"><span class="ic">≡</span>Audit Trail</a>
+    <a class="nav-item" data-view="access"><span class="ic">⚿</span>Access Logs</a>
+
+    <div class="nav-section-label">Govern</div>
+    <a class="nav-item" data-view="retention"><span class="ic">◷</span>Retention &amp; Region</a>
+    <a class="nav-item" data-view="tenancy"><span class="ic">▤</span>Tenant Isolation</a>
+    <a class="nav-item" data-view="telemetry"><span class="ic">⇄</span>Secure Telemetry</a>
+
+    <div class="sidebar-footer">
+      <div class="live-dot"></div> Live simulation running
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="viewTitle">Overview</h1>
+        <p id="viewSubtitle" class="subtitle">Real-time posture across all monitored AI applications</p>
+      </div>
+      <div class="topbar-actions">
+        <div class="alert-pill" id="alertPill">0 active alerts</div>
+      </div>
+    </header>
+
+    <section id="view-overview" class="view"></section>
+    <section id="view-redaction" class="view hidden"></section>
+    <section id="view-audit" class="view hidden"></section>
+    <section id="view-access" class="view hidden"></section>
+    <section id="view-retention" class="view hidden"></section>
+    <section id="view-tenancy" class="view hidden"></section>
+    <section id="view-telemetry" class="view hidden"></section>
+  </main>
+</div>
+
+
+
+
+
+<script>
+// ---------------------------------------------------------------
+// Sentinel — simulated data layer
+// In a real deployment these would be populated by the OTel
+// collector, the redaction microservice, and app-side SDKs.
+// ---------------------------------------------------------------
+
+const TENANTS = [
+  { id:"t-northwind", name:"Northwind Retail", region:"US", apps:["Support Copilot","Order Assistant"] },
+  { id:"t-acme",      name:"Acme Health",      region:"EU", apps:["Clinical Note Summarizer"] },
+  { id:"t-lumen",     name:"Lumen Finance",    region:"CA", apps:["Fraud Triage Agent"] },
+];
+
+const APPS = [
+  { id:"app-support",  name:"Support Copilot",           tenant:"t-northwind", owner:"jae.kim@northwind.com",
+    declared:["EMAIL","ORDER_ID"], region:"US", retentionDays:90 },
+  { id:"app-order",    name:"Order Assistant",           tenant:"t-northwind", owner:"priya.rao@northwind.com",
+    declared:["EMAIL","ADDRESS"], region:"US", retentionDays:90 },
+  { id:"app-clinical",  name:"Clinical Note Summarizer", tenant:"t-acme", owner:"dr.chen@acmehealth.eu",
+    declared:["NAME","HEALTH_RECORD"], region:"EU", retentionDays:30 },
+  { id:"app-fraud",    name:"Fraud Triage Agent",         tenant:"t-lumen", owner:"m.tremblay@lumenfin.ca",
+    declared:["SIN","CREDIT_CARD"], region:"CA", retentionDays:180 },
+];
+
+// Regulation lookup by region — used for drift/compliance mapping
+const REGION_REGULATIONS = {
+  US:  ["CCPA (if CA residents)"],
+  EU:  ["GDPR"],
+  CA:  ["PIPEDA"],
+};
+
+// PII category -> regulation notes, used in Sensitive Prompt Classification view
+const PII_REGULATION_MAP = {
+  SIN:            "PIPEDA (Canada) — government ID, high sensitivity",
+  CREDIT_CARD:    "PCI-DSS — payment card data",
+  EMAIL:          "GDPR / CCPA — direct identifier",
+  ADDRESS:        "GDPR / CCPA — direct identifier",
+  NAME:           "GDPR / CCPA / PIPEDA — direct identifier",
+  HEALTH_RECORD:  "HIPAA (US) / GDPR Art.9 special category (EU)",
+  PHONE:          "GDPR / CCPA — direct identifier",
+  ORDER_ID:       "Low sensitivity — internal reference",
+};
+
+// Recent access events (sign-ins / privileged actions) per app
+const ACCESS_EVENTS = [
+  { app:"app-support", user:"jae.kim@northwind.com", action:"sign_in", result:"success", ts:"2026-08-21 22:41" },
+  { app:"app-support", user:"jae.kim@northwind.com", action:"config_change: prompt_template_v3", result:"success", ts:"2026-08-21 22:44" },
+  { app:"app-order",   user:"priya.rao@northwind.com", action:"sign_in", result:"success", ts:"2026-08-21 20:02" },
+  { app:"app-clinical", user:"dr.chen@acmehealth.eu", action:"data_export: patient_summaries.csv", result:"success", ts:"2026-08-20 09:12" },
+  { app:"app-clinical", user:"unknown@203.0.113.9", action:"sign_in", result:"failed (bad credentials)", ts:"2026-08-20 03:15" },
+  { app:"app-fraud",   user:"m.tremblay@lumenfin.ca", action:"log_purge_attempt", result:"blocked (policy: no purge < retention)", ts:"2026-08-19 14:02" },
+  { app:"app-fraud",   user:"m.tremblay@lumenfin.ca", action:"sign_in", result:"success", ts:"2026-08-19 13:58" },
+];
+
+// Audit trail events emitted by monitored applications
+const AUDIT_EVENTS = [
+  { id:"AE-1042", app:"app-fraud",    tenant:"t-lumen", type:"model_drift_detected", severity:"critical",
+    detail:"Fraud model precision dropped 18% vs. baseline over 24h window", ts:"2026-08-22 03:10", owner:"m.tremblay@lumenfin.ca" },
+  { id:"AE-1041", app:"app-clinical", tenant:"t-acme", type:"undeclared_pii_detected", severity:"high",
+    detail:"HEALTH_RECORD field observed in retrieval chunk not present in declared profile", ts:"2026-08-21 22:50", owner:"dr.chen@acmehealth.eu" },
+  { id:"AE-1040", app:"app-support",  tenant:"t-northwind", type:"redaction_failure", severity:"high",
+    detail:"Detector service timeout — 3 spans passed through unredacted (fail-open window)", ts:"2026-08-21 19:22", owner:"jae.kim@northwind.com" },
+  { id:"AE-1039", app:"app-order",    tenant:"t-northwind", type:"latency_budget_exceeded", severity:"warn",
+    detail:"p95 latency 4.1s, budget 2.5s", ts:"2026-08-21 11:04", owner:"priya.rao@northwind.com" },
+  { id:"AE-1038", app:"app-fraud",    tenant:"t-lumen", type:"log_purge_attempt", severity:"high",
+    detail:"User attempted to purge audit logs younger than retention floor — blocked", ts:"2026-08-19 14:02", owner:"m.tremblay@lumenfin.ca" },
+  { id:"AE-1037", app:"app-clinical", tenant:"t-acme", type:"retention_check_passed", severity:"info",
+    detail:"Nightly retention sweep: all records within 30-day policy", ts:"2026-08-19 02:00", owner:"dr.chen@acmehealth.eu" },
+];
+
+// Cross-app data flow edges (for tenant isolation / inbound-outbound view)
+const DATA_FLOWS = [
+  { from:"app-support", to:"CRM (Salesforce)", direction:"outbound", data:["email","order_id"], tenant:"t-northwind" },
+  { from:"app-order",   to:"app-support",       direction:"internal", data:["order_id","address"], tenant:"t-northwind" },
+  { from:"app-clinical", to:"EHR (Epic)",       direction:"inbound",  data:["patient_name","health_record"], tenant:"t-acme" },
+  { from:"app-fraud",   to:"Core Banking API",  direction:"outbound", data:["transaction_id"], tenant:"t-lumen" },
+  { from:"app-fraud",   to:"app-fraud",         direction:"flagged",  data:["sin (cross-tenant leak candidate)"], tenant:"t-northwind", note:"Blocked: payload tagged tenant t-lumen appeared in t-northwind trace stream" },
+];
+
+// Sample raw prompt text used to drive the live redaction demo
+const SAMPLE_PROMPTS = [
+`Customer Jordan Blake (jordan.blake@gmail.com) is asking about order #88213.
+His SIN is 046 454 286 and he wants to update the card on file to 4539 1488 0343 6467.
+Can you confirm the refund status and call him back at (613) 555-0142?`,
+`Patient Maria Alvarez, DOB 1984-03-02, presented with elevated glucose (312 mg/dL).
+Contact: maria.alvarez84@outlook.com. Please summarize for the referring physician.`,
+];
+
+// ---------------------------------------------------------------
+// Sentinel — redaction engine (client-side simulation of the
+// OTel Collector "PII redaction processor" described in the spec)
+// Hybrid approach: regex for structured PII. In production this
+// pairs with an NER microservice for unstructured entities (names).
+// ---------------------------------------------------------------
+
+const ENTITY_PATTERNS = [
+  { type: "SIN",         re: /\b\d{3}[ -]?\d{3}[ -]?\d{3}\b/g },
+  { type: "CREDIT_CARD", re: /\b(?:\d[ -]?){13,16}\b/g },
+  { type: "EMAIL",       re: /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g },
+  { type: "PHONE",       re: /\(?\b\d{3}\)?[ -]?\d{3}[ -]?\d{4}\b/g },
+  { type: "DOB",         re: /\b\d{4}-\d{2}-\d{2}\b/g },
+  // lightweight "NER-style" name catch: two capitalized words in a row,
+  // excluding common sentence starters
+  { type: "NAME",        re: /\b(?!Please|Customer|Patient|Contact|His|Her|Can)[A-Z][a-z]+ [A-Z][a-z]+\b/g },
+];
+
+/**
+ * Runs the hybrid detector over raw text and returns:
+ *  - redacted: string with entities replaced by [REDACTED:TYPE]
+ *  - entities: list of {type, value, index}
+ */
+function detectAndRedact(text) {
+  let matches = [];
+
+  ENTITY_PATTERNS.forEach(({ type, re }) => {
+    let m;
+    const localRe = new RegExp(re.source, re.flags);
+    while ((m = localRe.exec(text)) !== null) {
+      matches.push({ type, value: m[0], start: m.index, end: m.index + m[0].length });
+    }
+  });
+
+  // remove overlapping matches (keep first found, longest-wins for overlaps)
+  matches.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
+  const filtered = [];
+  let lastEnd = -1;
+  for (const m of matches) {
+    if (m.start >= lastEnd) {
+      filtered.push(m);
+      lastEnd = m.end;
+    }
+  }
+
+  // build redacted string
+  let redacted = "";
+  let cursor = 0;
+  filtered.forEach(m => {
+    redacted += text.slice(cursor, m.start);
+    redacted += `[REDACTED:${m.type}]`;
+    cursor = m.end;
+  });
+  redacted += text.slice(cursor);
+
+  return { redacted, entities: filtered };
+}
+
+/**
+ * Builds an HTML fragment for the "raw" panel with strike-through
+ * spans over detected entities (for the visual diff).
+ */
+function renderRawHighlighted(text, entities) {
+  let html = "";
+  let cursor = 0;
+  entities.forEach(m => {
+    html += escapeHtml(text.slice(cursor, m.start));
+    html += `<span class="pii-strike" title="${m.type}">${escapeHtml(m.value)}</span>`;
+    cursor = m.end;
+  });
+  html += escapeHtml(text.slice(cursor));
+  return html.replace(/\n/g, "<br>");
+}
+
+function renderRedactedHtml(text, entities) {
+  let html = "";
+  let cursor = 0;
+  entities.forEach(m => {
+    html += escapeHtml(text.slice(cursor, m.start));
+    html += `<span class="pii-token">[REDACTED:${m.type}]</span>`;
+    cursor = m.end;
+  });
+  html += escapeHtml(text.slice(cursor));
+  return html.replace(/\n/g, "<br>");
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// ---------------------------------------------------------------
+// Sentinel — view renderers
+// Each function returns an HTML string for its section, filtered
+// by the currently selected tenant + role (RBAC simulation).
+// ---------------------------------------------------------------
+
+function appsFor(tenantId){
+  return tenantId === "all" ? APPS : APPS.filter(a => a.tenant === tenantId);
+}
+function auditFor(tenantId){
+  return tenantId === "all" ? AUDIT_EVENTS : AUDIT_EVENTS.filter(e => e.tenant === tenantId);
+}
+function accessFor(tenantId){
+  const ids = appsFor(tenantId).map(a=>a.id);
+  return ACCESS_EVENTS.filter(e => ids.includes(e.app));
+}
+function tenantName(id){ const t = TENANTS.find(t=>t.id===id); return t ? t.name : id; }
+function appName(id){ const a = APPS.find(a=>a.id===id); return a ? a.name : id; }
+
+function sevBadge(sev){
+  return `<span class="badge ${sev}">${sev}</span>`;
+}
+
+// ---------------- OVERVIEW ----------------
+function renderOverview(tenantId, role){
+  const apps = appsFor(tenantId);
+  const audits = auditFor(tenantId);
+  const criticalCount = audits.filter(a=>a.severity==="critical").length;
+  const highCount = audits.filter(a=>a.severity==="high").length;
+  const flows = tenantId==="all" ? DATA_FLOWS : DATA_FLOWS.filter(f=>f.tenant===tenantId);
+  const flaggedFlow = flows.find(f=>f.direction==="flagged");
+
+  return `
+  <div class="grid grid-4 section">
+    <div class="card stat-card ${criticalCount? 'bad':'good'}">
+      <div class="stat-value">${criticalCount}</div>
+      <div class="stat-label">Critical alerts open</div>
+    </div>
+    <div class="card stat-card ${highCount? 'warn':'good'}">
+      <div class="stat-value">${highCount}</div>
+      <div class="stat-label">High-severity events (7d)</div>
+    </div>
+    <div class="card stat-card good">
+      <div class="stat-value">${apps.length}</div>
+      <div class="stat-label">Monitored applications</div>
+    </div>
+    <div class="card stat-card ${flaggedFlow? 'bad':'good'}">
+      <div class="stat-value">${flaggedFlow? 1 : 0}</div>
+      <div class="stat-label">Cross-tenant leak flags</div>
+    </div>
+  </div>
+
+  <div class="two-col section">
+    <div class="card">
+      <div class="card-title">Monitored applications</div>
+      <table>
+        <thead><tr><th>App</th><th>Tenant</th><th>Region</th><th>Retention</th><th>Owner</th></tr></thead>
+        <tbody>
+          ${apps.map(a=>`
+            <tr>
+              <td>${a.name}</td>
+              <td class="dim">${tenantName(a.tenant)}</td>
+              <td class="mono">${a.region}</td>
+              <td class="mono">${a.retentionDays}d</td>
+              <td class="faint">${a.owner}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">Latest audit signals</div>
+      ${audits.slice(0,5).map(e=>`
+        <div style="padding:9px 0; border-bottom:1px solid var(--line-soft);">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="mono" style="font-size:12px;">${e.type}</span>
+            ${sevBadge(e.severity)}
+          </div>
+          <div class="dim" style="font-size:12px; margin-top:4px;">${appName(e.app)} · ${e.ts}</div>
+        </div>
+      `).join("")}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Compliance posture snapshot</div>
+    <div class="grid grid-3">
+      ${apps.map(a=>{
+        const regs = REGION_REGULATIONS[a.region] || [];
+        const undeclared = audits.some(e=>e.app===a.id && e.type==="undeclared_pii_detected");
+        return `<div class="flow-row" style="flex-direction:column; align-items:flex-start; gap:4px; border:1px solid var(--line); border-radius:8px; padding:12px;">
+          <div style="display:flex; justify-content:space-between; width:100%;">
+            <strong style="font-size:13px;">${a.name}</strong>
+            ${undeclared? '<span class="badge high">drift</span>' : '<span class="badge ok">aligned</span>'}
+          </div>
+          <div class="dim" style="font-size:12px;">Applicable: ${regs.join(", ")}</div>
+          <div class="faint" style="font-size:11.5px;">Declared PII: ${a.declared.join(", ")}</div>
+        </div>`;
+      }).join("")}
+    </div>
+  </div>
+  `;
+}
+
+// ---------------- PII REDACTION ----------------
+function renderRedaction(tenantId){
+  const apps = appsFor(tenantId);
+  return `
+  <div class="section">
+    <div class="redact-demo">
+      <div class="redact-demo-head">
+        <div class="title">LIVE REDACTION PIPELINE — try your own text</div>
+        <span class="badge neutral">hybrid: regex + NER</span>
+      </div>
+      <div style="padding:16px 18px 0;">
+        <textarea id="rawInput">${SAMPLE_PROMPTS[0]}</textarea>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="run-btn" onclick="runRedactionDemo()">Run detector →</button>
+          <select id="sampleSelect" onchange="loadSample(this.value)" style="background:var(--bg); color:var(--text-dim); border:1px solid var(--line); border-radius:6px; padding:7px 8px; font-size:12px; margin-top:10px;">
+            <option value="0">Sample: support ticket</option>
+            <option value="1">Sample: clinical note</option>
+          </select>
+        </div>
+      </div>
+      <div class="redact-panels" style="margin-top:10px;">
+        <div class="redact-panel">
+          <div class="label">Raw payload (never leaves the app boundary)</div>
+          <div id="rawPanel">—</div>
+        </div>
+        <div class="redact-panel">
+          <div class="label">What reaches telemetry / logs / dashboard</div>
+          <div id="redactedPanel">—</div>
+        </div>
+      </div>
+      <div class="entity-legend" id="entityLegend"></div>
+    </div>
+  </div>
+
+  <div class="two-col section">
+    <div class="card">
+      <div class="card-title">Redaction events (last 24h)</div>
+      <table>
+        <thead><tr><th>App</th><th>Field</th><th>Entity</th><th>Action</th><th>Policy ver.</th></tr></thead>
+        <tbody>
+          ${[
+            {app:"app-support", field:"llm.prompt", entity:"CREDIT_CARD", action:"redacted", pv:"v3"},
+            {app:"app-support", field:"llm.prompt", entity:"SIN", action:"redacted", pv:"v3"},
+            {app:"app-fraud", field:"retrieval.chunk", entity:"SIN", action:"redacted", pv:"v4"},
+            {app:"app-clinical", field:"llm.completion", entity:"NAME", action:"redacted", pv:"v3"},
+            {app:"app-support", field:"llm.prompt", entity:"EMAIL", action:"flagged (fail-open, detector timeout)", pv:"v3"},
+          ].filter(r=>tenantId==="all" || APPS.find(a=>a.id===r.app)?.tenant===tenantId)
+           .map(r=>`<tr>
+              <td>${appName(r.app)}</td>
+              <td class="mono">${r.field}</td>
+              <td><span class="badge info">${r.entity}</span></td>
+              <td class="${r.action.includes('flagged')?'':'dim'}" style="${r.action.includes('flagged')?'color:var(--amber)':''}">${r.action}</td>
+              <td class="mono faint">${r.pv}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">Failure policy</div>
+      <div class="flow-row"><div class="flow-node">Detector reachable</div><span class="flow-arrow">→</span><div class="flow-node" style="color:var(--teal);">redact & forward</div></div>
+      <div class="flow-row"><div class="flow-node">Detector unreachable</div><span class="flow-arrow">→</span><div class="flow-node" style="color:var(--red);">fail-closed: drop span</div></div>
+      <p class="small-note">Default policy is <strong>fail-closed</strong>. Apps may opt into fail-open with an explicit exception, which is itself logged as an audit event (see AE-1040).</p>
+    </div>
+  </div>
+  `;
+}
+
+// ---------------- AUDIT TRAIL ----------------
+function renderAudit(tenantId){
+  const audits = auditFor(tenantId);
+  return `
+  <div class="card section">
+    <div class="card-title">Audit trail — all applications</div>
+    <table>
+      <thead><tr><th>ID</th><th>App</th><th>Type</th><th>Severity</th><th>Detail</th><th>Timestamp</th><th>Notified</th></tr></thead>
+      <tbody>
+        ${audits.map(e=>`
+          <tr>
+            <td class="mono faint">${e.id}</td>
+            <td>${appName(e.app)}</td>
+            <td class="mono">${e.type}</td>
+            <td>${sevBadge(e.severity)}</td>
+            <td class="dim" style="max-width:320px;">${e.detail}</td>
+            <td class="mono faint">${e.ts}</td>
+            <td>${(e.severity==="critical"||e.severity==="high") ? `<span class="badge ok">admin + ${e.owner.split('@')[0]}</span>` : `<span class="badge neutral">—</span>`}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <div class="card-title">Alert routing rule</div>
+    <p class="small-note" style="font-size:12.5px; color:var(--text-dim);">
+      When an audit event's severity is <strong>high</strong> or <strong>critical</strong>, Sentinel notifies
+      (1) the platform administrator and (2) the registered owner of the emitting application, via the configured
+      channel. The routing agent attaches the triggering event, affected tenant, and a suggested next action.
+    </p>
+  </div>
+  `;
+}
+
+// ---------------- ACCESS LOGS ----------------
+function renderAccess(tenantId){
+  const events = accessFor(tenantId);
+  const apps = appsFor(tenantId);
+  return `
+  <div class="two-col section">
+    <div class="card">
+      <div class="card-title">Recent sign-ins &amp; privileged actions</div>
+      <table>
+        <thead><tr><th>App</th><th>User</th><th>Action</th><th>Result</th><th>Time</th></tr></thead>
+        <tbody>
+          ${events.map(e=>`
+            <tr>
+              <td>${appName(e.app)}</td>
+              <td class="mono" style="font-size:11.5px;">${e.user}</td>
+              <td class="dim">${e.action}</td>
+              <td>${e.result.includes('success') ? '<span class="badge ok">success</span>' : e.result.includes('blocked') ? '<span class="badge high">blocked</span>' : '<span class="badge critical">failed</span>'}</td>
+              <td class="mono faint">${e.ts}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">Log retention &amp; purge policy per app</div>
+      ${apps.map(a=>`
+        <div style="padding:10px 0; border-bottom:1px solid var(--line-soft);">
+          <div style="display:flex; justify-content:space-between;">
+            <strong style="font-size:13px;">${a.name}</strong>
+            <span class="mono faint" style="font-size:11.5px;">${a.retentionDays} days</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" style="width:${Math.min(100, a.retentionDays/2)}%;"></div></div>
+          <div class="small-note">Purge before floor: <strong style="color:var(--red);">not permitted</strong> — enforced by Sentinel independent of source app.</div>
+        </div>
+      `).join("")}
+    </div>
+  </div>
+  `;
+}
+
+// ---------------- RETENTION & REGION ----------------
+function renderRetention(tenantId){
+  const apps = appsFor(tenantId);
+  return `
+  <div class="card section">
+    <div class="card-title">Data residency &amp; retention by application</div>
+    <table>
+      <thead><tr><th>App</th><th>Serves region</th><th>Applicable law</th><th>Retention set</th><th>Status</th></tr></thead>
+      <tbody>
+        ${apps.map(a=>{
+          const regs = (REGION_REGULATIONS[a.region]||[]).join(", ");
+          const risk = a.region==="EU" && a.retentionDays>30;
+          return `<tr>
+            <td>${a.name}</td>
+            <td class="mono">${a.region}</td>
+            <td class="dim">${regs}</td>
+            <td class="mono">${a.retentionDays}d</td>
+            <td>${risk ? '<span class="badge high">at risk</span>' : '<span class="badge ok">compliant</span>'}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+    <p class="small-note">Retention floors are cross-checked nightly against actual record age in each app's data store where API access is available.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Sensitive-category → regulation reference</div>
+    <div class="grid grid-3">
+      ${Object.entries(PII_REGULATION_MAP).map(([k,v])=>`
+        <div style="border:1px solid var(--line); border-radius:8px; padding:10px;">
+          <div class="mono" style="color:var(--teal); font-size:12px;">${k}</div>
+          <div class="dim" style="font-size:11.5px; margin-top:4px;">${v}</div>
+        </div>
+      `).join("")}
+    </div>
+  </div>
+  `;
+}
+
+// ---------------- TENANT ISOLATION ----------------
+function renderTenancy(tenantId){
+  const flows = tenantId==="all" ? DATA_FLOWS : DATA_FLOWS.filter(f=>f.tenant===tenantId);
+  return `
+  <div class="card section">
+    <div class="card-title">Inter-application data flow (inbound / outbound)</div>
+    <table>
+      <thead><tr><th>Source</th><th></th><th>Destination</th><th>Direction</th><th>Data exchanged</th><th>Tenant</th></tr></thead>
+      <tbody>
+        ${flows.map(f=>`
+          <tr style="${f.direction==='flagged' ? 'background:rgba(239,91,91,.06);' : ''}">
+            <td>${appName(f.from) !== f.from ? appName(f.from) : f.from}</td>
+            <td class="faint">→</td>
+            <td>${appName(f.to) !== f.to ? appName(f.to) : f.to}</td>
+            <td>${f.direction==='flagged' ? '<span class="badge critical">flagged</span>' : `<span class="badge neutral">${f.direction}</span>`}</td>
+            <td class="mono" style="font-size:11.5px;">${f.data.join(", ")}</td>
+            <td class="dim">${tenantName(f.tenant)}</td>
+          </tr>
+          ${f.note ? `<tr><td colspan="6" class="small-note" style="padding-left:10px; color:var(--red);">↳ ${f.note}</td></tr>` : ''}
+        `).join("")}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Enforcement model</div>
+    <div class="flow-row"><div class="flow-node">Every event ingested</div><span class="flow-arrow">→</span><div class="flow-node">tagged with tenant_id</div><span class="flow-arrow">→</span><div class="flow-node" style="color:var(--teal);">query layer filters by requester's tenant</div></div>
+    <p class="small-note">A platform admin role may cross tenant boundaries only with an explicit permission grant — every such cross-tenant read is itself logged as an access event.</p>
+  </div>
+  `;
+}
+
+// ---------------- SECURE TELEMETRY ----------------
+function renderTelemetry(tenantId){
+  return `
+  <div class="two-col section">
+    <div class="card">
+      <div class="card-title">Telemetry path</div>
+      <div class="flow-row"><div class="flow-node">App SDK</div><span class="flow-arrow">→</span><div class="flow-node">OTel Collector</div></div>
+      <div class="flow-row" style="padding-left:20px;"><span class="flow-arrow">↳</span><div class="flow-node" style="color:var(--teal);">PII redaction processor (in-process)</div></div>
+      <div class="flow-row"><div class="flow-node">Collector</div><span class="flow-arrow">→ TLS 1.2+ →</span><div class="flow-node">Sentinel ingest</div></div>
+      <div class="flow-row"><div class="flow-node">Ingest</div><span class="flow-arrow">→</span><div class="flow-node">AES-256 at rest</div></div>
+      <p class="small-note">Redaction executes before the network boundary — unmasked payloads never leave the source application's process.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">Transport &amp; storage controls</div>
+      <table>
+        <thead><tr><th>Control</th><th>Setting</th></tr></thead>
+        <tbody>
+          <tr><td>Transport encryption</td><td class="mono">TLS 1.2+ (OTLP/gRPC)</td></tr>
+          <tr><td>At-rest encryption</td><td class="mono">AES-256, KMS-managed keys</td></tr>
+          <tr><td>Batch integrity</td><td class="mono">HMAC-signed batches</td></tr>
+          <tr><td>Key rotation</td><td class="mono">90 days</td></tr>
+          <tr><td>Secrets in collector config</td><td><span class="badge ok">none — vault refs only</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  `;
+}
+
+// ---------------------------------------------------------------
+// Sentinel — app controller
+// ---------------------------------------------------------------
+
+const state = { view: "overview", tenant: "all", role: "admin" };
+
+const VIEW_META = {
+  overview:  { title:"Overview",              sub:"Real-time posture across all monitored AI applications" },
+  redaction: { title:"PII Redaction",         sub:"Sensitive-data detection and masking before telemetry leaves the app" },
+  audit:     { title:"Audit Trail",           sub:"Structured audit events from every monitored application" },
+  access:    { title:"Access-Controlled Logs",sub:"Sign-ins, privileged actions, and purge attempts, centrally collected" },
+  retention: { title:"Retention & Region",    sub:"Data residency, retention floors, and applicable regulation" },
+  tenancy:   { title:"Tenant Isolation",      sub:"Cross-application data flow and tenant boundary enforcement" },
+  telemetry: { title:"Secure Telemetry",      sub:"Transport and storage controls for all platform telemetry" },
+};
+
+const RENDERERS = {
+  overview: renderOverview,
+  redaction: renderRedaction,
+  audit: renderAudit,
+  access: renderAccess,
+  retention: renderRetention,
+  tenancy: renderTenancy,
+  telemetry: renderTelemetry,
+};
+
+function renderCurrentView(){
+  document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
+  const el = document.getElementById("view-" + state.view);
+  el.classList.remove("hidden");
+  el.innerHTML = RENDERERS[state.view](state.tenant, state.role);
+
+  document.getElementById("viewTitle").textContent = VIEW_META[state.view].title;
+  document.getElementById("viewSubtitle").textContent = VIEW_META[state.view].sub;
+
+  if (state.view === "redaction") {
+    // initialize demo panel with current sample
+    loadSample(document.getElementById("sampleSelect")?.value || "0");
+  }
+
+  updateAlertPill();
+}
+
+function updateAlertPill(){
+  const audits = auditFor(state.tenant);
+  const active = audits.filter(a => a.severity==="critical" || a.severity==="high").length;
+  const pill = document.getElementById("alertPill");
+  pill.textContent = active + " active alert" + (active===1?"":"s");
+  pill.classList.toggle("clear", active===0);
+}
+
+function loadSample(idx){
+  const sel = document.getElementById("sampleSelect");
+  if (sel) sel.value = idx;
+  document.getElementById("rawInput").value = SAMPLE_PROMPTS[idx];
+  runRedactionDemo();
+}
+
+function runRedactionDemo(){
+  const text = document.getElementById("rawInput").value;
+  const { entities } = detectAndRedact(text);
+  document.getElementById("rawPanel").innerHTML = renderRawHighlighted(text, entities);
+  document.getElementById("redactedPanel").innerHTML = renderRedactedHtml(text, entities);
+
+  const counts = {};
+  entities.forEach(e => counts[e.type] = (counts[e.type]||0) + 1);
+  const legend = Object.entries(counts).map(([t,c]) =>
+    `<span class="badge info">${t} × ${c}</span>`
+  ).join(" ") || `<span class="badge neutral">no sensitive entities detected</span>`;
+  document.getElementById("entityLegend").innerHTML = legend;
+}
+
+// ---- wire up nav / selectors ----
+document.querySelectorAll(".nav-item").forEach(item => {
+  item.addEventListener("click", () => {
+    document.querySelectorAll(".nav-item").forEach(i => i.classList.remove("active"));
+    item.classList.add("active");
+    state.view = item.dataset.view;
+    renderCurrentView();
+  });
+});
+
+document.getElementById("tenantSelect").addEventListener("change", e => {
+  state.tenant = e.target.value;
+  renderCurrentView();
+});
+document.getElementById("roleSelect").addEventListener("change", e => {
+  state.role = e.target.value;
+  renderCurrentView();
+});
+
+renderCurrentView();
+
+</script>
+</body>
+</html>

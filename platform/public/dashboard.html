@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel — AI Agent Observability Platform</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app">
+
+  <nav class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">◈</div>
+      <div class="brand-name">Sentinel</div>
+    </div>
+
+    <div class="tenant-switcher" id="tenantSwitcher">
+      <!-- populated by app.js: tenant dropdown for admin/compliance, or a
+           read-only "who you are" line for app_owner -->
+    </div>
+
+    <div class="nav-section-label">Monitor</div>
+    <a class="nav-item active" data-view="overview"><span class="ic">◎</span>Overview</a>
+    <a class="nav-item" data-view="redaction"><span class="ic">▦</span>PII Redaction</a>
+    <a class="nav-item" data-view="audit"><span class="ic">≡</span>Audit Trail</a>
+    <a class="nav-item" data-view="access"><span class="ic">⚿</span>Access Logs</a>
+
+    <div class="nav-section-label">Govern</div>
+    <a class="nav-item" data-view="retention"><span class="ic">◷</span>Retention &amp; Region</a>
+    <a class="nav-item" data-view="tenancy"><span class="ic">▤</span>Tenant Isolation</a>
+    <a class="nav-item" data-view="telemetry"><span class="ic">⇄</span>Secure Telemetry</a>
+
+    <div class="sidebar-footer">
+      <span><span class="live-dot"></span> Connected</span>
+      <button id="logoutBtn">sign out</button>
+    </div>
+  </nav>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="viewTitle">Overview</h1>
+        <p id="viewSubtitle" class="subtitle">Real-time posture across all monitored AI applications</p>
+      </div>
+      <div class="topbar-actions">
+        <button class="sweep-btn" id="sweepBtn" style="display:none;">Run compliance sweep</button>
+        <div class="alert-pill" id="alertPill">0 active alerts</div>
+      </div>
+    </header>
+
+    <section id="view-overview" class="view"></section>
+    <section id="view-redaction" class="view hidden"></section>
+    <section id="view-audit" class="view hidden"></section>
+    <section id="view-access" class="view hidden"></section>
+    <section id="view-retention" class="view hidden"></section>
+    <section id="view-tenancy" class="view hidden"></section>
+    <section id="view-telemetry" class="view hidden"></section>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

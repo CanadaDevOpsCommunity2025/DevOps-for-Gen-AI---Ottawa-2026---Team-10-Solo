@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel — Sign in</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="login-shell">
+  <div class="login-card">
+    <div class="brand">
+      <div class="brand-mark">◈</div>
+      <div class="brand-name">Sentinel</div>
+    </div>
+    <div class="login-error" id="loginError"></div>
+    <form id="loginForm">
+      <label>Email</label>
+      <input type="email" id="email" autocomplete="username" required>
+      <label>Password</label>
+      <input type="password" id="password" autocomplete="current-password" required>
+      <button type="submit">Sign in →</button>
+    </form>
+    <div class="login-hint" id="loginHint" style="display:none;">
+      Seed accounts (see <code>platform/seed.js</code>):<br>
+      <code>admin@sentinel.platform</code> / <code>admin123</code> — platform admin<br>
+      <code>compliance@sentinel.platform</code> / <code>compliance123</code> — compliance officer<br>
+      <code>jae.kim@northwind.com</code> / <code>password123</code> — app owner (RAG Support Agent)
+    </div>
+  </div>
+</div>
+<script>
+// Only surface plaintext demo credentials when running locally — never on a
+// real deployment reachable by anyone else.
+if (['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+  document.getElementById('loginHint').style.display = 'block';
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'login failed');
+    localStorage.setItem('sentinel_token', data.token);
+    localStorage.setItem('sentinel_user', JSON.stringify(data.user));
+    window.location.href = 'dashboard.html';
+  } catch (err) {
+    errEl.textContent = err.message;
+  }
+});
+</script>
+</body>
+</html>
