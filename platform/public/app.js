@@ -33,7 +33,14 @@ async function api(path, opts = {}) {
   return data;
 }
 
-const state = { view: 'overview', tenant: user.role === 'app_owner' ? user.tenant_id : 'all', tenants: [] };
+const state = {
+  view: 'overview',
+  tenant: user.role === 'app_owner' ? user.tenant_id : 'all',
+  tenants: [],
+  frTenant: null,
+  traceExpanded: null,
+};
+const frTraceCache = {};
 
 function tenantQS() {
   return state.tenant && state.tenant !== 'all' ? `?tenant=${encodeURIComponent(state.tenant)}` : '';
@@ -357,6 +364,187 @@ async function renderAccess() {
   `;
 }
 
+// ---------------- LIVE RAG TRACES (bridged from flight-recorder) ----------------
+const FR_SCENARIOS = ['nominal', 'retrieval_miss', 'tool_loop', 'cost_spike', 'pii_leak', 'timeout', 'prompt_injection', 'rate_limit', 'latency_spike'];
+
+async function frTenantsFor() {
+  const qs = state.tenant && state.tenant !== 'all' ? `?tenant=${encodeURIComponent(state.tenant)}` : '';
+  const resp = await api(`/api/fr/tenants${qs}`);
+  return resp.tenants || [];
+}
+
+function frVerdictBadge(v) {
+  if (!v) return sevBadge('info');
+  const sev = v.severity === 'critical' ? 'critical' : v.severity === 'warning' ? 'high' : 'info';
+  return sevBadge(sev);
+}
+
+function frTraceDetailHtml(detail) {
+  if (!detail) return `<div class="empty-note">Loading…</div>`;
+  if (detail.error) return `<div class="empty-note">Failed to load: ${escapeHtml(detail.error)}</div>`;
+  const v = detail.verdict || {};
+  const spans = detail.spans || [];
+  const payloads = detail.payloads || [];
+  return `
+    <div style="padding:10px 4px;">
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+        ${frVerdictBadge(v)}<strong style="font-size:12.5px;">${escapeHtml(v.title || 'nominal')}</strong>
+      </div>
+      ${v.detail ? `<div class="dim" style="font-size:12px; margin-bottom:10px;">${escapeHtml(v.detail)}</div>` : ''}
+      <table style="margin-bottom:10px;">
+        <thead><tr><th>Kind</th><th>Name</th><th>Status</th><th>Duration</th></tr></thead>
+        <tbody>
+          ${spans.map((s) => `<tr>
+              <td class="mono faint">${escapeHtml(s.kind)}</td>
+              <td>${escapeHtml(s.name || '')}</td>
+              <td>${s.status === 'error' ? '<span class="badge critical">error</span>' : '<span class="badge ok">ok</span>'}</td>
+              <td class="mono faint">${Math.round(s.duration_ms || 0)}ms</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      ${payloads.length ? `
+      <div class="faint" style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Payloads (post-redaction — this is all Sentinel or flight-recorder ever shows)</div>
+      ${payloads.map((p) => `
+        <div style="border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin-bottom:6px;">
+          <div style="display:flex; justify-content:space-between;">
+            <span class="mono faint" style="font-size:11px;">${escapeHtml(p.role)}</span>
+            ${p.masked_here ? '<span class="badge high">masked here (defence-in-depth catch)</span>' : (p.caught_at === 'ingest' ? '<span class="badge ok">masked at ingest</span>' : '<span class="badge neutral">clean</span>')}
+          </div>
+          <div class="dim" style="font-size:12px; margin-top:4px; white-space:pre-wrap;">${escapeHtml(p.content)}</div>
+        </div>
+      `).join('')}` : ''}
+    </div>
+  `;
+}
+
+function frTraceRow(t) {
+  const id = t.trace_id;
+  const expanded = state.traceExpanded === id;
+  const ts = Number(t.start_ns) ? fmtTs(new Date(Number(t.start_ns) / 1e6).toISOString()) : '—';
+  const row = `
+    <tr class="fr-trace-row" data-trace="${escapeHtml(id)}" style="cursor:pointer;">
+      <td class="faint">${expanded ? '▾' : '▸'}</td>
+      <td class="mono" style="font-size:11px;">${escapeHtml(String(id).slice(0, 12))}…</td>
+      <td><span class="badge info">${escapeHtml(String(t.scenario || 'trace').replace(/_/g, ' '))}</span></td>
+      <td>${t.status === 'error' ? '<span class="badge critical">error</span>' : '<span class="badge ok">ok</span>'}</td>
+      <td class="mono faint">${t.span_count || '—'}</td>
+      <td class="mono">$${Number(t.cost_usd || 0).toFixed(4)}</td>
+      <td class="mono faint">${Math.round(t.duration_ms || 0)}ms</td>
+      <td class="mono faint">${ts}</td>
+    </tr>`;
+  if (!expanded) return row;
+  const detail = frTraceCache[`${state.frTenant}:${id}`];
+  return `${row}<tr><td colspan="8">${frTraceDetailHtml(detail)}</td></tr>`;
+}
+
+async function renderTraces() {
+  let frTenants;
+  try {
+    frTenants = await frTenantsFor();
+  } catch (err) {
+    return `<div class="empty-note">Could not reach flight-recorder bridge: ${escapeHtml(err.message)}</div>`;
+  }
+  if (!frTenants.length) {
+    return `<div class="empty-note">No flight-recorder-connected application for this tenant. Run flight-recorder/register_with_sentinel.py to connect one.</div>`;
+  }
+  if (!state.frTenant || !frTenants.some((t) => t.sentinelTenantId === state.frTenant)) {
+    state.frTenant = frTenants[0].sentinelTenantId;
+  }
+  const frQS = `?tenant=${encodeURIComponent(state.frTenant)}`;
+
+  let stats, tracesResp;
+  try {
+    [stats, tracesResp] = await Promise.all([
+      api(`/api/fr/stats${frQS}`),
+      api(`/api/fr/traces${frQS}&limit=40`),
+    ]);
+  } catch (err) {
+    return `<div class="empty-note">Could not reach flight-recorder: ${escapeHtml(err.message)}</div>`;
+  }
+  const traces = tracesResp.traces || [];
+
+  const tenantPicker = frTenants.length > 1 ? `
+    <select id="frTenantSelect" style="background:var(--bg); color:var(--text-dim); border:1px solid var(--line); border-radius:6px; padding:5px 8px; font-size:12px;">
+      ${frTenants.map((t) => `<option value="${t.sentinelTenantId}" ${state.frTenant === t.sentinelTenantId ? 'selected' : ''}>${escapeHtml(t.frTenant)}</option>`).join('')}
+    </select>` : `<span class="dim mono" style="font-size:12px;">${escapeHtml(frTenants[0].frTenant)}</span>`;
+
+  return `
+  <div class="grid grid-4 section">
+    <div class="card stat-card good"><div class="stat-value">${stats.traces || 0}</div><div class="stat-label">Traces recorded</div></div>
+    <div class="card stat-card ${stats.errors ? 'warn' : 'good'}"><div class="stat-value">${stats.errors || 0}</div><div class="stat-label">Errored traces</div></div>
+    <div class="card stat-card ${stats.escaped ? 'bad' : 'good'}"><div class="stat-value">${stats.escaped || 0}</div><div class="stat-label">PII escaped ingest</div></div>
+    <div class="card stat-card good"><div class="stat-value">$${Number(stats.cost_usd || 0).toFixed(4)}</div><div class="stat-label">Total cost tracked</div></div>
+  </div>
+
+  <div class="card section">
+    <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; text-transform:none; letter-spacing:normal;">
+      <span style="text-transform:uppercase; letter-spacing:.06em;">Live traces from flight-recorder</span>
+      ${tenantPicker}
+    </div>
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+      <select id="frScenarioSelect" style="background:var(--bg); color:var(--text-dim); border:1px solid var(--line); border-radius:6px; padding:7px 8px; font-size:12px;">
+        ${FR_SCENARIOS.map((s) => `<option value="${s}">${s.replace(/_/g, ' ')}</option>`).join('')}
+      </select>
+      <button class="run-btn" id="frInjectBtn">Fire live scenario →</button>
+      <span class="faint" style="font-size:11.5px;">Generates real RAG traffic through flight-recorder — lands here <em>and</em> in flight-recorder's own console at once.</span>
+    </div>
+    ${traces.length ? `<table>
+      <thead><tr><th></th><th>Trace</th><th>Scenario</th><th>Status</th><th>Spans</th><th>Cost</th><th>Duration</th><th>Time</th></tr></thead>
+      <tbody id="frTraceBody">
+        ${traces.map((t) => frTraceRow(t)).join('')}
+      </tbody>
+    </table>` : `<div class="empty-note">No traces yet for this app. Fire a live scenario above, or run flight-recorder's traffic generator.</div>`}
+  </div>
+  `;
+}
+
+function wireTraces() {
+  const btn = document.getElementById('frInjectBtn');
+  if (btn) btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = 'Firing…';
+    const scenario = document.getElementById('frScenarioSelect').value;
+    try {
+      await api('/api/fr/inject', { method: 'POST', body: JSON.stringify({ scenario, count: 5 }) });
+    } catch (err) {
+      // still refresh below — flight-recorder may have partially run
+    }
+    await renderCurrentView();
+  });
+
+  const sel = document.getElementById('frTenantSelect');
+  if (sel) sel.addEventListener('change', (e) => {
+    state.frTenant = e.target.value;
+    state.traceExpanded = null;
+    renderCurrentView();
+  });
+
+  document.querySelectorAll('.fr-trace-row').forEach((row) => {
+    row.addEventListener('click', async () => {
+      const id = row.dataset.trace;
+      if (state.traceExpanded === id) {
+        state.traceExpanded = null;
+        renderCurrentView();
+        return;
+      }
+      const key = `${state.frTenant}:${id}`;
+      if (!frTraceCache[key]) {
+        try {
+          const [traceResp, payloadsResp] = await Promise.all([
+            api(`/api/fr/trace/${encodeURIComponent(id)}?tenant=${encodeURIComponent(state.frTenant)}`),
+            api(`/api/fr/payloads/${encodeURIComponent(id)}?tenant=${encodeURIComponent(state.frTenant)}`),
+          ]);
+          frTraceCache[key] = { ...traceResp, payloads: payloadsResp.payloads || [] };
+        } catch (err) {
+          frTraceCache[key] = { error: err.message };
+        }
+      }
+      state.traceExpanded = id;
+      renderCurrentView();
+    });
+  });
+}
+
 // ---------------- RETENTION & REGION ----------------
 async function renderRetention() {
   const data = await api(`/api/retention${tenantQS()}`);
@@ -461,6 +649,7 @@ const VIEW_META = {
   redaction: { title: 'PII Redaction', sub: 'Sensitive-data detection and masking before telemetry leaves the app' },
   audit: { title: 'Audit Trail', sub: 'Structured audit events from every monitored application' },
   access: { title: 'Access-Controlled Logs', sub: 'Sign-ins, privileged actions, and purge attempts, centrally collected' },
+  traces: { title: 'Live RAG Traces', sub: 'Real spans, verdicts, and redacted payloads pulled live from flight-recorder' },
   retention: { title: 'Retention & Region', sub: 'Data residency, retention floors, and applicable regulation' },
   tenancy: { title: 'Tenant Isolation', sub: 'Cross-application data flow and tenant boundary enforcement' },
   telemetry: { title: 'Secure Telemetry', sub: 'Transport and storage controls for all platform telemetry' },
@@ -470,6 +659,7 @@ const RENDERERS = {
   redaction: renderRedaction,
   audit: renderAudit,
   access: renderAccess,
+  traces: renderTraces,
   retention: renderRetention,
   tenancy: renderTenancy,
   telemetry: renderTelemetry,
@@ -490,6 +680,7 @@ async function renderCurrentView() {
   document.getElementById('viewSubtitle').textContent = VIEW_META[state.view].sub;
 
   if (state.view === 'redaction') window.loadSample(document.getElementById('sampleSelect')?.value || '0');
+  if (state.view === 'traces') wireTraces();
 
   document.getElementById('sweepBtn').style.display = user.role !== 'app_owner' ? 'inline-block' : 'none';
 

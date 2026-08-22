@@ -157,6 +157,8 @@ main{display:grid;grid-template-columns:minmax(330px,1fr) minmax(0,1.55fr);
       <option value="auditor">auditor</option>
     </select></div>
   <div class="spacer"></div>
+  <a class="etch" id="sentinelLink" href="#" target="_blank" rel="noopener"
+     style="color:var(--cyan); text-decoration:none;">Sentinel dashboard ↗</a>
   <div class="etch" id="clock"></div>
 </header>
 
@@ -181,6 +183,11 @@ const SCEN=[["pii_leak","PII leak"],["retrieval_miss","Retrieval miss"],
   ["tool_loop","Tool loop"],["cost_spike","Cost spike"],["timeout","Timeout"],
   ["prompt_injection","Injection"],["nominal","Healthy"]];
 let tenant=null, role="developer", selected=null, traces=[], busy=false;
+
+// Same-host companion dashboard runs on :4000 — link out to it so the two
+// consoles feel like one product rather than two disconnected demos.
+const sentinelLink = document.getElementById("sentinelLink");
+if (sentinelLink) sentinelLink.href = `${location.protocol}//${location.hostname}:4000`;
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));

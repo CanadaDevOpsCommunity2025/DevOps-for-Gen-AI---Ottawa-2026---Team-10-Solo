@@ -165,13 +165,21 @@ def verify_chain() -> bool:
 
 @api.post("/api/inject")
 def inject(scenario: str = Query(...), count: int = 1):
-    """Fire a scenario on demand. This is the button a judge clicks."""
+    """
+    Fire a scenario on demand. This is the button a judge clicks.
+
+    Sinks to both sqlite (this console) and sentinel — otherwise traffic
+    generated interactively here would only ever show up in this UI, and
+    Sentinel would only ever reflect whatever was pushed at deploy time.
+    Missing sentinel-config.json degrades gracefully: SentinelSink just
+    warns and skips the forward, so the sqlite side still works.
+    """
     from harness.scenarios import SCENARIOS
     if scenario not in SCENARIOS:
         raise HTTPException(400, f"unknown scenario {scenario}")
     cmd = [sys.executable, str(ROOT / "harness" / "run.py"),
            "--count", str(count), "--scenario", scenario,
-           "--sink", "sqlite", "--db", DB, "--rate", "50"]
+           "--sink", "sqlite,sentinel", "--db", DB, "--rate", "50"]
     subprocess.run(cmd, capture_output=True, timeout=60, cwd=ROOT)
     return {"ok": True, "scenario": scenario, "count": count}
 

@@ -7,6 +7,7 @@ const authRoutes = require('./routes/auth');
 const appsRoutes = require('./routes/apps');
 const ingestRoutes = require('./routes/ingest');
 const dashboardRoutes = require('./routes/dashboard');
+const frProxyRoutes = require('./routes/frProxy');
 
 const PORT = process.env.PORT || 4000;
 
@@ -29,6 +30,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/apps', appsRoutes);
 app.use('/api/ingest', ingestRoutes);
 app.use('/api', dashboardRoutes);
+app.use('/api', frProxyRoutes);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 

@@ -53,9 +53,9 @@ else
 fi
 
 echo "==> latest Amazon Linux 2023 AMI"
-AMI_ID=$(aws ssm get-parameter --region "$REGION" \
-  --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
-  --query 'Parameter.Value' --output text)
+AMI_ID=$(aws ec2 describe-images --region "$REGION" --owners amazon \
+  --filters "Name=name,Values=al2023-ami-2023.*-kernel-*-x86_64" "Name=state,Values=available" \
+  --query 'sort_by(Images,&CreationDate)[-1].ImageId' --output text)
 echo "    $AMI_ID"
 
 echo "==> checking for an existing instance"
