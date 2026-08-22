@@ -53,7 +53,8 @@ echo "==> installing systemd units"
 cp "$APP_DIR/deploy/sentinel.service" /etc/systemd/system/sentinel.service
 cp "$APP_DIR/deploy/flight-recorder.service" /etc/systemd/system/flight-recorder.service
 systemctl daemon-reload
-systemctl enable --now sentinel
+systemctl enable sentinel
+systemctl restart sentinel
 echo "==> waiting for Sentinel to come up"
 for i in $(seq 1 30); do
   curl -sf http://localhost:4000/health > /dev/null && break
