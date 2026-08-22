@@ -2,6 +2,7 @@
 
 from .monitor import FailureThresholds, ModelMonitor, ModelResult
 from .drift import calculate_feature_drift, calculate_psi
+from .health import calculate_health_score
 from .metrics import calculate_accuracy, calculate_false_positive_rate, calculate_precision_recall
 
-__all__ = ["FailureThresholds", "ModelMonitor", "ModelResult", "calculate_accuracy", "calculate_false_positive_rate", "calculate_precision_recall", "calculate_feature_drift", "calculate_psi"]
+__all__ = ["FailureThresholds", "ModelMonitor", "ModelResult", "calculate_accuracy", "calculate_false_positive_rate", "calculate_precision_recall", "calculate_feature_drift", "calculate_psi", "calculate_health_score"]
