@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hackathon-ml"
+version = "0.1.0"
+description = "Phase 1 ML prototype for fraud monitoring demo"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26,<3",
+  "pandas>=2.2,<3",
+  "scikit-learn>=1.5,<2",
+  "joblib>=1.4,<2"
+]
+
+[tool.setuptools]
+package-dir = {"" = "ml"}
+
+[tool.setuptools.packages.find]
+where = ["ml"]
