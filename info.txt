@@ -1,0 +1,130 @@
+Person 1 ML
+
+Build:
+
+Synthetic transaction dataset
+Fraud Model V1
+Fraud Model V2
+Intentionally bad V2 for demo
+Deploy models to SageMaker
+
+Goal:
+Transaction → Fraud probability
+
+Person 2 — AI Safety / Monitoring
+
+Build:
+
+Accuracy
+Precision / recall
+False-positive rate
+Data drift
+Model health score
+Failure thresholds
+
+Goal:
+
+🟢 HEALTHY
+🟡 WARNING
+🔴 CRITICAL
+👤 Person 3 — Deployment & Rollback
+
+Build:
+
+V1 = 100%
+Deploy V2 = 5%
+Monitor V2
+Increase traffic if healthy
+Automatically rollback if bad
+
+Goal:
+
+V1 95% / V2 5%
+       ↓
+    V2 fails
+       ↓
+V1 100% / V2 0%
+
+Use SageMaker + Step Functions.
+
+Person 4 — Backend / AWS Integration
+
+Build:
+
+API Gateway
+Lambda
+DynamoDB
+Connect ML + monitoring + deployment
+
+Endpoints:
+
+POST /transaction
+GET  /metrics
+GET  /model-status
+POST /deploy
+POST /simulate-failure
+Person 5 — Frontend
+
+Build ONE dashboard:
+
+AI GUARDIAN
+
+System: 🟢 PROTECTED
+
+Model V1      Model V2
+97.8%         96.4%
+100%          5%
+
+Accuracy:     97.8%
+Precision:    95.2%
+Recall:       96.1%
+Drift:         2.1%
+
+Traffic
+V1 ███████████████████ 95%
+V2 █ 5%
+
+LIVE EVENTS
+✓ V2 tests passed
+✓ Canary started
+⚠ Performance degrading
+🔴 Rollback triggered
+✓ V1 restored
+
+Finance: AI Fraud Detection + Deployment Safety
+
+Build a system for a bank that uses AI to detect fraudulent transactions while also making sure the AI itself stays reliable and secure.
+
+Reliability:
+
+Monitors the accuracy of the fraud detection model.
+Detects when the model starts making more mistakes.
+Tests new models before they are deployed.
+
+Autonomous DevOps:
+
+Deploys new versions safely.
+Tests a new model on a small percentage of transactions first.
+Automatically rolls back if the new model performs badly.
+
+Security:
+
+Simulates malicious or unusual transaction patterns.
+Detects suspicious activity and API abuse.
+Blocks or flags potential attacks.
+
+Example:
+
+A bank wants to deploy Fraud Model v2.
+
+The system tests it and finds that accuracy dropped from 94% to 82%.
+
+It automatically blocks the deployment.
+
+If the model is already deployed and starts failing:
+
+Detect problem → Alert → Roll back to Model v1
+
+Overall idea:
+
+An AI safety system for banks that tests, monitors, secures, and automatically rolls back their fraud-detection AI.
